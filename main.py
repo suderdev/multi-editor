@@ -1,4 +1,5 @@
 import os
+import pathlib
 import threading
 import time
 
@@ -121,14 +122,19 @@ def index(url=''):
 
     app.logger.debug('User %s authorized via GitHub' % str(github_user_login))
 
+    user_path = '%s/users/user_%s_%s' % (APP_PATH,
+                                         str(github_user_id),
+                                         str(github_user_login))
+    pathlib.Path(user_path).touch()
+
     containers = get_containers(github_user_id)
     if not containers:
         app.logger.info('No editor for user %s, starting new' %
                         str(github_user_login))
-        project_dir = ('%s/projects/user_%s_%s' %
-                       (APP_PATH, github_user_login, github_user_id))
-        ssh_dir = ('%s/ssh/user_%s_%s' %
-                   (APP_PATH, github_user_login, github_user_id))
+        project_dir = ('%s/projects/user_%s' %
+                       (APP_PATH, github_user_id))
+        ssh_dir = ('%s/ssh/user_%s' %
+                   (APP_PATH, github_user_id))
         try:
             os.mkdir(project_dir)
         except FileExistsError:
@@ -140,6 +146,7 @@ def index(url=''):
             app.logger.warning('SSH key for user %s exists, reusing it' %
                                str(github_user_login))
         client.containers.run(image='theiaide/theia-python:latest',
+                              name='user_%s' % str(github_user_id),
                               auto_remove=True,
                               detach=True,
                               ports={'3000/tcp': None},

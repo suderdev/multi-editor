@@ -288,6 +288,13 @@
     become: true
     become_user: root
 
+  - name: Create directory for users
+    file:
+      path: /opt/app/users
+      state: directory
+    become: true
+    become_user: root
+
   - name: Create directory for projects
     file:
       path: /opt/app/projects
