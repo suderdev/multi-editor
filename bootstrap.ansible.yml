@@ -288,6 +288,20 @@
     become: true
     become_user: root
 
+  - name: Create directory for projects
+    file:
+      path: /opt/app/projects
+      state: directory
+    become: true
+    become_user: root
+
+  - name: Create directory for SSH keys
+    file:
+      path: /opt/app/ssh
+      state: directory
+    become: true
+    become_user: root
+
   - name: Start app
     docker_container:
       name: app
@@ -301,6 +315,7 @@
       - "5000:5000"
       volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
+      - "/opt/app:/opt/app"
     register: backend
     become: true
     become_user: root
