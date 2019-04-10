@@ -3,6 +3,7 @@ gunicorn
 honcho
 python-dotenv
 websocket_client
+raven[flask]
 
 flask
 flask-dance

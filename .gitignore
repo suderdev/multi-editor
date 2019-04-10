@@ -5,3 +5,7 @@
 *.egg-info/
 .idea/
 .env
+*.retry
+custom.yml
+internal.crt
+internal.key

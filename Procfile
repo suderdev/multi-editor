@@ -1,1 +1,1 @@
-web: gunicorn --worker-class flask_sockets.worker -w 2 main:app --log-file=-
+web: gunicorn --worker-class flask_sockets.worker --workers 2 --certfile=internal.crt --keyfile=internal.key --log-file=- main:app

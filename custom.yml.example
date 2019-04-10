@@ -1,0 +1,23 @@
+---
+
+instance_name: editor.example.com
+common_name: editor.example.com
+zone_name: example.com
+record_name: editor
+
+# Please set your account email to notify about expiring certificate:
+acme_account_email:
+# For dev purposes use staging default settings.
+# For production use following settings.
+# Please uncomment following line:
+#acme_directory: https://acme-v01.api.letsencrypt.org/directory
+
+# Please configure following settings:
+cloudflare_email:
+cloudflare_api_token:
+sentry_dsn:
+github_oauth_client_id:
+github_oauth_client_secret:
+
+# Please use any generated ASCII long-enough string:
+flask_secret_key:

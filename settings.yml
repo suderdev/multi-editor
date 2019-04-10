@@ -1,0 +1,19 @@
+---
+
+flavor_name: s1-8
+image_name: "Ubuntu 16.04"
+user_name: ubuntu
+network_name: Ext-Net
+
+packages:
+- "apt-transport-https"
+- "ca-certificates"
+- "curl"
+- "gnupg2"
+- "software-properties-common"
+
+pip_packages:
+- "setuptools"
+- "docker"
+- "docker-compose"
+- "pyOpenSSL"

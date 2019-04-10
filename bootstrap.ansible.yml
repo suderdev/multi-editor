@@ -1,0 +1,321 @@
+---
+
+- hosts: localhost
+  gather_facts: false
+  vars_files:
+  - "settings.yml"
+  - "custom.yml"
+
+  tasks:
+  - name: Add key
+    os_keypair:
+      name: default
+      public_key_file: "{{ lookup('env','HOME') }}/.ssh/id_rsa.pub"
+
+  - name: Create instance
+    os_server:
+      state: present
+      name: "{{ instance_name }}"
+      image: "{{ image_name }}"
+      key_name: default
+      wait: yes
+      flavor: "{{ flavor_name }}"
+      network: "{{ network_name }}"
+      userdata: |
+        #!/usr/bin/env bash
+        sudo apt update
+        sudo apt install -y build-essential python python-dev python-pip python-setuptools
+    register: instance
+
+  - name: Wait for SSH prompt (check if python is installed)
+    command: |
+      ssh -oBatchMode=yes -oStrictHostKeyChecking=no {{ user_name }}@{{ instance.server.public_v4 }} python
+    register: result
+    until: result is success
+    retries: 5
+    delay: 10
+
+  - name: Delete existing DNS entry
+    cloudflare_dns:
+      zone: "{{ zone_name }}"
+      record: "{{ record_name }}"
+      type: A
+      state: absent
+      account_email: "{{ cloudflare_email }}"
+      account_api_token: "{{ cloudflare_api_token }}"
+
+  - name: Add new DNS entry with instance IP
+    cloudflare_dns:
+      zone: "{{ zone_name }}"
+      record: "{{ record_name }}"
+      type: A
+      value: "{{ instance.server.public_v4 }}"
+      proxied: no
+      account_email: "{{ cloudflare_email }}"
+      account_api_token: "{{ cloudflare_api_token }}"
+
+  - name: Add instances to inventory
+    add_host:
+      name: "{{ instance.server.name }}"
+      groups: servers
+      ansible_ssh_host: "{{ instance.server.public_v4 }}"
+
+
+- hosts: "{{ instance_name }}"
+  remote_user: "{{ user_name }}"
+  vars_files:
+  - "settings.yml"
+  - "custom.yml"
+
+  tasks:
+  - name: Install packages
+    apt:
+      name: "{{ packages }}"
+    become: true
+    become_user: root
+    register: result
+    until: result is success
+    retries: 5
+    delay: 10
+
+  - name: Install python packages
+    pip:
+      name: "{{ pip_packages }}"
+    become: true
+    become_user: root
+
+  - name: Add Docker GPG public key
+    shell: |
+      curl -fsSL https://download.docker.com/linux/$(. /etc/os-release; echo ${ID})/gpg | sudo apt-key add -
+    args:
+      warn: false
+
+  - name: Add Docker APT repository url
+    shell: |
+      source /etc/os-release
+      sudo add-apt-repository \
+         "deb [arch=amd64] https://download.docker.com/linux/$(. /etc/os-release; echo ${ID}) \
+         $(lsb_release -cs) \
+         stable"
+
+  - name: Install Docker CE
+    apt:
+      name: docker-ce
+      update_cache: yes
+    become: true
+    become_user: root
+
+  - name: Check Docker service
+    service:
+      name: docker
+      state: restarted
+    become: true
+    become_user: root
+
+  - name: Create directory for Nginx configuration
+    file:
+      path: /etc/nginx
+      state: directory
+    become: true
+    become_user: root
+
+  - name: Setup Nginx configuration
+    template:
+      src: nginx.conf.j2
+      dest: /etc/nginx/nginx.conf
+    become: true
+    become_user: root
+
+  - name: Create directory for application configuration
+    file:
+      path: /etc/nginx/conf.d
+      state: directory
+    become: true
+    become_user: root
+
+  - name: Setup application configuration
+    template:
+      src: app.conf.j2
+      dest: /etc/nginx/conf.d/app.conf
+    become: true
+    become_user: root
+
+  - name: Create directory for SSL
+    file:
+      path: /etc/ssl
+      state: directory
+    become: true
+    become_user: root
+
+  - name: Generate private key
+    openssl_privatekey:
+      path: "/etc/ssl/{{ common_name }}.key"
+    become: true
+    become_user: root
+
+  - name: Generate CSR for certificate
+    openssl_csr:
+      path: "/etc/ssl/{{ common_name }}.csr"
+      privatekey_path: "/etc/ssl/{{ common_name }}.key"
+      common_name: "{{ common_name }}"
+    become: true
+    become_user: root
+
+  - name: Generate ACME account key
+    openssl_privatekey:
+      path: "/etc/ssl/acme-account-{{ common_name }}.key"
+    become: true
+    become_user: root
+
+  - name: Prepare ACME challenge
+    acme_certificate:
+      acme_directory: "{{ acme_directory | default('https://acme-staging.api.letsencrypt.org/directory') }}"
+      account_key_src: "/etc/ssl/acme-account-{{ common_name }}.key"
+      account_email: "{{ acme_account_email }}"
+      csr: "/etc/ssl/{{ common_name }}.csr"
+      dest: "/etc/ssl/{{ common_name }}.crt"
+      fullchain_dest: "/etc/ssl/{{ common_name }}-fullchain.crt"
+      force: no
+    register: challenge
+    become: true
+    become_user: root
+
+  - name: Store ACME challenge
+    template:
+      src: acme.inc.j2
+      dest: /etc/nginx/conf.d/acme.inc
+    when: challenge is changed
+    become: true
+    become_user: root
+
+  - name: Start Nginx
+    docker_container:
+      name: nginx
+      image: nginx
+      state: started
+      restart: yes
+      volumes:
+      - /etc/ssl:/etc/ssl
+      - /etc/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - /etc/nginx/conf.d:/etc/nginx/conf.d
+      ports:
+      - "80:80"
+      - "443:443"
+    become: true
+    become_user: root
+
+  - name: Validate ACME challenge and retrieve certificates
+    acme_certificate:
+      acme_directory: "{{ acme_directory | default('https://acme-staging.api.letsencrypt.org/directory') }}"
+      account_key_src: "/etc/ssl/acme-account-{{ common_name }}.key"
+      account_email: "{{ acme_account_email }}"
+      csr: "/etc/ssl/{{ common_name }}.csr"
+      dest: "/etc/ssl/{{ common_name }}.crt"
+      fullchain_dest: "/etc/ssl/{{ common_name }}-fullchain.crt"
+      chain_dest: "/etc/ssl/{{ common_name }}-intermediate.crt"
+      data: "{{ challenge }}"
+      force: no
+    become: true
+    become_user: root
+
+  - name: Setup application configuration with SSL
+    template:
+      src: app.ssl.conf.j2
+      dest: /etc/nginx/conf.d/app.ssl.conf
+    become: true
+    become_user: root
+
+  - name: Download editor
+    docker_image:
+      name: theiaide/theia-python:latest
+    become: true
+    become_user: root
+
+  - name: Create app dir
+    file:
+      path: /opt/app
+      state: directory
+    become: true
+    become_user: root
+
+  - name: Generate internal private key
+    openssl_privatekey:
+      path: /opt/app/internal.key
+    become: true
+    become_user: root
+
+  - name: Generate a CSR for internal certificate
+    openssl_csr:
+      path: /opt/app/internal.csr
+      privatekey_path: /opt/app/internal.key
+      common_name: internal
+    become: true
+    become_user: root
+
+  - name: Generate a self signed internal certificate
+    openssl_certificate:
+      path: /opt/app/internal.crt
+      privatekey_path: /opt/app/internal.key
+      csr_path: /opt/app/internal.csr
+      provider: selfsigned
+    become: true
+    become_user: root
+
+  - name: Copy app files
+    copy:
+      src: "{{ item }}"
+      dest: "/opt/app/{{ item }}"
+    with_items:
+    - Dockerfile
+    - main.py
+    - Procfile
+    - requirements.txt
+    become: true
+    become_user: root
+
+  - name: Set env
+    template:
+      src: .env.j2
+      dest: /opt/app/.env
+    become: true
+    become_user: root
+
+  - name: Build app
+    docker_image:
+      name: app
+      path: /opt/app
+      force: yes
+    become: true
+    become_user: root
+
+  - name: Start app
+    docker_container:
+      name: app
+      image: app
+      state: started
+      restart: yes
+      recreate: yes
+      networks:
+      - name: bridge
+      ports:
+      - "5000:5000"
+      volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    register: backend
+    become: true
+    become_user: root
+
+  - name: Configure backend
+    template:
+      src: backend.inc.j2
+      dest: /etc/nginx/conf.d/backend.inc
+    become: true
+    become_user: root
+
+  - name: Restart Nginx
+    docker_container:
+      name: nginx
+      state: started
+      restart: yes
+    become: true
+    become_user: root

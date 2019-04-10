@@ -12,9 +12,7 @@ with open('requirements.txt') as f:
 
 setup(
     name='multi_editor',
-    packages=[
-        'multi_editor',
-    ],
+    packages=[],
     include_package_data=True,
     install_requires=required,
     version='1.0',

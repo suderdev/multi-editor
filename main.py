@@ -1,5 +1,6 @@
 import os
 import threading
+import time
 
 import docker
 import flask
@@ -10,15 +11,20 @@ import websocket
 from flask_dance.contrib.github import github
 from flask_dance.contrib.github import make_github_blueprint
 
+from raven.contrib import flask as sentry_flask
+
+SENTRY_DSN = os.environ.get('SENTRY_DSN', None)
+
 
 app = flask.Flask(__name__)
 
-main_app = app
+if SENTRY_DSN:
+    sentry = sentry_flask.Sentry(app, dsn=SENTRY_DSN)
 
-app.config['SECRET_KEY'] = \
-    os.environ.get('FLASK_SECRET_KEY', 'secret')
-app.config['DEBUG'] = \
-    os.environ.get('DEBUG', False)
+app.config['PREFERRED_URL_SCHEME'] = 'https'
+
+app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'secret')
+app.config['FLASK_ENV'] = os.environ.get('FLASK_ENV', 'production')
 
 app.config['GITHUB_OAUTH_CLIENT_ID'] = \
     os.environ.get('GITHUB_OAUTH_CLIENT_ID')
@@ -34,11 +40,13 @@ oauth = make_github_blueprint()
 def services(ext):
     assert flask.session['user_id']
     assert flask.session['port']
+    assert flask.session['ip']
 
     port = flask.session['port']
-    app.logger.info('Forwarding port %s' % str(port))
+    ip = flask.session['ip']
+    app.logger.info('Forwarding port %s:%s' % (ip, str(port)))
 
-    int = websocket.WebSocketApp('ws://localhost:%s/services' % str(port))
+    int = websocket.WebSocketApp('ws://%s:3000/services' % ip)
 
     def on_message(ws, message):
         app.logger.debug('Forward to client: %s' % str(message))
@@ -79,6 +87,11 @@ def get_port(container):
     return ports['3000/tcp'][0]['HostPort']
 
 
+def get_ip(container):
+    ips = container.attrs['NetworkSettings']['Networks']
+    return ips['bridge']['IPAddress']
+
+
 @router.route('/')
 @router.route('/<path:url>')
 def index(url=''):
@@ -103,14 +116,18 @@ def index(url=''):
                               auto_remove=True,
                               detach=True,
                               ports={'3000/tcp': None},
+                              network='bridge',
                               labels={'user': str(github_user_id)})
+        time.sleep(3)
         containers = get_containers(github_user_id)
 
     port = get_port(containers[0])
+    ip = get_ip(containers[0])
     flask.session['port'] = port
-    app.logger.info('Proxying port %s' % str(port))
+    flask.session['ip'] = ip
+    app.logger.info('Proxying port %s:%s' % (ip, str(port)))
 
-    req = requests.get('http://localhost:%s/%s' % (port, url))
+    req = requests.get('http://%s:3000/%s' % (ip, url))
     return flask.Response(req, content_type=req.headers['content-type'])
 
 
