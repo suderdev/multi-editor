@@ -169,7 +169,9 @@
 
   - name: Prepare ACME challenge
     acme_certificate:
-      acme_directory: "{{ acme_directory | default('https://acme-staging.api.letsencrypt.org/directory') }}"
+      acme_version: 2
+      terms_agreed: yes
+      acme_directory: "{{ acme_directory | default('https://acme-staging-v02.api.letsencrypt.org/directory') }}"
       account_key_src: "/etc/ssl/acme-account-{{ common_name }}.key"
       account_email: "{{ acme_account_email }}"
       csr: "/etc/ssl/{{ common_name }}.csr"
@@ -206,7 +208,9 @@
 
   - name: Validate ACME challenge and retrieve certificates
     acme_certificate:
-      acme_directory: "{{ acme_directory | default('https://acme-staging.api.letsencrypt.org/directory') }}"
+      acme_version: 2
+      terms_agreed: yes
+      acme_directory: "{{ acme_directory | default('https://acme-staging-v02.api.letsencrypt.org/directory') }}"
       account_key_src: "/etc/ssl/acme-account-{{ common_name }}.key"
       account_email: "{{ acme_account_email }}"
       csr: "/etc/ssl/{{ common_name }}.csr"
