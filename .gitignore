@@ -10,3 +10,4 @@ custom.yml
 internal.crt
 internal.key
 user_*
+hosts

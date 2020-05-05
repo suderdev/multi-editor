@@ -1,19 +1,25 @@
 ---
 
-flavor_name: s1-8
-image_name: "Ubuntu 16.04"
 user_name: ubuntu
-network_name: Ext-Net
 
 packages:
 - "apt-transport-https"
+- "build-essential"
 - "ca-certificates"
 - "curl"
 - "gnupg2"
+- "python3"
+- "python3-dev"
+- "python3-pip"
+- "python3-setuptools"
 - "software-properties-common"
 
 pip_packages:
-- "setuptools"
 - "docker"
 - "docker-compose"
 - "pyOpenSSL"
+
+## Note: following settings are related to OpenStack only.
+flavor_name: s1-8
+image_name: "Ubuntu 16.04"
+network_name: Ext-Net

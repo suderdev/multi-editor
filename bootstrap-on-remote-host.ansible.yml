@@ -1,66 +1,5 @@
 ---
 
-- hosts: localhost
-  gather_facts: false
-  vars_files:
-  - "settings.yml"
-  - "custom.yml"
-
-  tasks:
-  - name: Add key
-    os_keypair:
-      name: default
-      public_key_file: "{{ lookup('env','HOME') }}/.ssh/id_rsa.pub"
-
-  - name: Create instance
-    os_server:
-      state: present
-      name: "{{ instance_name }}"
-      image: "{{ image_name }}"
-      key_name: default
-      wait: yes
-      flavor: "{{ flavor_name }}"
-      network: "{{ network_name }}"
-      userdata: |
-        #!/usr/bin/env bash
-        sudo apt update
-        sudo apt install -y build-essential python python-dev python-pip python-setuptools
-    register: instance
-
-  - name: Wait for SSH prompt (check if python is installed)
-    command: |
-      ssh -oBatchMode=yes -oStrictHostKeyChecking=no {{ user_name }}@{{ instance.server.public_v4 }} python
-    register: result
-    until: result is success
-    retries: 5
-    delay: 10
-
-  - name: Delete existing DNS entry
-    cloudflare_dns:
-      zone: "{{ zone_name }}"
-      record: "{{ record_name }}"
-      type: A
-      state: absent
-      account_email: "{{ cloudflare_email }}"
-      account_api_token: "{{ cloudflare_api_token }}"
-
-  - name: Add new DNS entry with instance IP
-    cloudflare_dns:
-      zone: "{{ zone_name }}"
-      record: "{{ record_name }}"
-      type: A
-      value: "{{ instance.server.public_v4 }}"
-      proxied: no
-      account_email: "{{ cloudflare_email }}"
-      account_api_token: "{{ cloudflare_api_token }}"
-
-  - name: Add instances to inventory
-    add_host:
-      name: "{{ instance.server.name }}"
-      groups: servers
-      ansible_ssh_host: "{{ instance.server.public_v4 }}"
-
-
 - hosts: "{{ instance_name }}"
   remote_user: "{{ user_name }}"
   vars_files:
@@ -166,6 +105,7 @@
       path: "/etc/ssl/acme-account-{{ common_name }}.key"
     become: true
     become_user: root
+    tags: [ 'never', 'acmesigned' ]
 
   - name: Prepare ACME challenge
     acme_certificate:
@@ -177,18 +117,24 @@
       csr: "/etc/ssl/{{ common_name }}.csr"
       dest: "/etc/ssl/{{ common_name }}.crt"
       fullchain_dest: "/etc/ssl/{{ common_name }}-fullchain.crt"
+      challenge: dns-01
       force: no
     register: challenge
     become: true
     become_user: root
+    tags: [ 'never', 'acmesigned' ]
 
-  - name: Store ACME challenge
-    template:
-      src: acme.inc.j2
-      dest: /etc/nginx/conf.d/acme.inc
-    when: challenge is changed
-    become: true
-    become_user: root
+  - name: Add new DNS entry with ACME challenge
+    cloudflare_dns:
+      zone: "{{ zone_name }}"
+      record: "{{ challenge.challenge_data[common_name]['dns-01'].record }}"
+      type: TXT
+      value: "{{ challenge.challenge_data[common_name]['dns-01'].resource_value | regex_replace('^(.*)$', '\"\\1\"') }}"
+      proxied: no
+      account_email: "{{ cloudflare_email }}"
+      account_api_token: "{{ cloudflare_api_token }}"
+    when: challenge is changed and common_name in challenge.challenge_data
+    tags: [ 'never', 'acmesigned' ]
 
   - name: Start Nginx
     docker_container:
@@ -217,10 +163,22 @@
       dest: "/etc/ssl/{{ common_name }}.crt"
       fullchain_dest: "/etc/ssl/{{ common_name }}-fullchain.crt"
       chain_dest: "/etc/ssl/{{ common_name }}-intermediate.crt"
+      challenge: dns-01
       data: "{{ challenge }}"
       force: no
     become: true
     become_user: root
+    tags: [ 'never', 'acmesigned' ]
+
+  - name: Generate a self signed internal certificate
+    openssl_certificate:
+      path: "/etc/ssl/{{ common_name }}.crt"
+      privatekey_path: "/etc/ssl/{{ common_name }}.key"
+      csr_path: "/etc/ssl/{{ common_name }}.csr"
+      provider: selfsigned
+    become: true
+    become_user: root
+    tags: [ 'never', 'selfsigned' ]
 
   - name: Setup application configuration with SSL
     template:
@@ -270,10 +228,16 @@
       src: "{{ item }}"
       dest: "/opt/app/{{ item }}"
     with_items:
-    - Dockerfile
     - main.py
     - Procfile
     - requirements.txt
+    become: true
+    become_user: root
+
+  - name: Template Docker image
+    template:
+      src: Dockerfile.j2
+      dest: /opt/app/Dockerfile
     become: true
     become_user: root
 

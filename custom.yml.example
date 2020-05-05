@@ -1,23 +1,47 @@
 ---
 
+# Used to access host
+user_name: ubuntu
 instance_name: editor.example.com
-common_name: editor.example.com
-zone_name: example.com
-record_name: editor
 
-# Please set your account email to notify about expiring certificate:
+# Used for ACME and self-signed certificates
+common_name: editor.example.com
+
+# Please set your account email to notify about expiring certificate
 acme_account_email:
 # For dev purposes use staging default settings.
 # For production use following settings.
 # Please uncomment following line:
 #acme_directory: https://acme-v02.api.letsencrypt.org/directory
+#force_ssl: yes
 
-# Please configure following settings:
+# Used to setup ACME challenge (and interact with CloudFlare)
 cloudflare_email:
 cloudflare_api_token:
-sentry_dsn:
-github_oauth_client_id:
-github_oauth_client_secret:
+zone_name: example.com
 
-# Please use any generated ASCII long-enough string:
+# Used only if bootstrap happens on OpenStack
+record_name: editor
+
+# Required for access via some OAuth provider
+oauth_client_id:
+oauth_client_secret:
+# Base URL is OAuth provider API base url. For GitHub it could be "https://api.github.com".
+oauth_base_url:
+# User URL is OAuth provider API url dependent. For GitHub it could be "/api/v3/user" or "/v3/user".
+oauth_user_url:
+oauth_token_url:
+oauth_authorization_url:
+
+# Please use any generated ASCII long-enough string
 flask_secret_key:
+
+# Note: it is up to you if you want to provide this, requires Sentry
+# Anyway, you need to have it, even empty.
+sentry_dsn:
+
+# Special settings for Docker image build behind proxy
+# If not needed, leave them empty.
+http_proxy:
+https_proxy:
+no_proxy:

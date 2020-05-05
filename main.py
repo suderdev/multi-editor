@@ -9,8 +9,7 @@ import flask_sockets
 import requests
 import websocket
 
-from flask_dance.contrib.github import github
-from flask_dance.contrib.github import make_github_blueprint
+from flask_dance import consumer
 
 from raven.contrib import flask as sentry_flask
 
@@ -30,14 +29,16 @@ app.config['PREFERRED_URL_SCHEME'] = 'https'
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'secret')
 app.config['FLASK_ENV'] = os.environ.get('FLASK_ENV', 'production')
 
-app.config['GITHUB_OAUTH_CLIENT_ID'] = \
-    os.environ.get('GITHUB_OAUTH_CLIENT_ID')
-app.config['GITHUB_OAUTH_CLIENT_SECRET'] = \
-    os.environ.get('GITHUB_OAUTH_CLIENT_SECRET')
-
 router = flask.Blueprint('router', __name__)
 ws = flask.Blueprint('ws', __name__)
-oauth = make_github_blueprint()
+oauth = consumer.OAuth2ConsumerBlueprint(
+    "oauth", __name__,
+    client_id=os.environ.get('OAUTH_CLIENT_ID'),
+    client_secret=os.environ.get('OAUTH_CLIENT_SECRET'),
+    base_url=os.environ.get('OAUTH_BASE_URL'),
+    token_url=os.environ.get('OAUTH_TOKEN_URL'),
+    authorization_url=os.environ.get('OAUTH_AUTHORIZATION_URL'),
+)
 
 
 @ws.route('/services')
@@ -106,14 +107,15 @@ def get_ip(container):
 @router.route('/')
 @router.route('/<path:url>')
 def index(url=''):
-    if not github.authorized:
-        app.logger.info('Not authorized, redirect to GitHub')
-        return flask.redirect(flask.url_for('github.login'))
+    if not oauth.authorized:
+        app.logger.info('Not authorized, redirecting')
+        return flask.redirect(flask.url_for('oauth.login'))
 
-    resp = github.get('/user')
+    resp = oauth.session.get(os.environ.get('OAUTH_USER_URL'))
+
     if not resp.ok:
-        app.logger.warn('Response about user incorrect, redirect to GitHub')
-        return flask.redirect(flask.url_for('github.login'))
+        app.logger.warn('Response about user incorrect, redirecting')
+        return flask.redirect(flask.url_for('oauth.login'))
 
     github_user_id = resp.json()['id']
     github_user_login = resp.json()['login']
