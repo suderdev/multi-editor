@@ -10,7 +10,7 @@ acme_account_email:
 # For dev purposes use staging default settings.
 # For production use following settings.
 # Please uncomment following line:
-#acme_directory: https://acme-v01.api.letsencrypt.org/directory
+#acme_directory: https://acme-v02.api.letsencrypt.org/directory
 
 # Please configure following settings:
 cloudflare_email:
