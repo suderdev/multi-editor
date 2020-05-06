@@ -248,9 +248,22 @@
     become: true
     become_user: root
 
-  - name: Download editor
+  - name: Template editor image
+    template:
+      src: editor.Dockerfile.j2
+      dest: /opt/app/editor.Dockerfile
+    become: true
+    become_user: root
+
+  - name: Build editor image
     docker_image:
-      name: theiaide/theia-python:latest
+      name: editor
+      build:
+        path: /opt/app
+        dockerfile: editor.Dockerfile
+        pull: yes
+      force_source: yes
+      source: build
     become: true
     become_user: root
 
@@ -295,10 +308,10 @@
     become: true
     become_user: root
 
-  - name: Template Docker image
+  - name: Template app image
     template:
-      src: Dockerfile.j2
-      dest: /opt/app/Dockerfile
+      src: app.Dockerfile.j2
+      dest: /opt/app/app.Dockerfile
     become: true
     become_user: root
 
@@ -309,11 +322,14 @@
     become: true
     become_user: root
 
-  - name: Build app
+  - name: Build app image
     docker_image:
       name: app
-      path: /opt/app
-      force: yes
+      build:
+        path: /opt/app
+        dockerfile: app.Dockerfile
+        pull: yes
+      source: build
     become: true
     become_user: root
 
@@ -324,16 +340,9 @@
     become: true
     become_user: root
 
-  - name: Create directory for projects
+  - name: Create directory for spaces
     file:
-      path: /opt/app/projects
-      state: directory
-    become: true
-    become_user: root
-
-  - name: Create directory for SSH keys
-    file:
-      path: /opt/app/ssh
+      path: /opt/app/spaces
       state: directory
     become: true
     become_user: root
@@ -352,6 +361,7 @@
       volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
       - "/opt/app:/opt/app"
+      networks_cli_compatible: yes
     register: backend
     become: true
     become_user: root

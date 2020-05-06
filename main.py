@@ -133,30 +133,21 @@ def index(url=''):
     if not containers:
         app.logger.info('No editor for user %s, starting new' %
                         str(github_user_login))
-        project_dir = ('%s/projects/user_%s' %
-                       (APP_PATH, github_user_id))
-        ssh_dir = ('%s/ssh/user_%s' %
-                   (APP_PATH, github_user_id))
+        space_dir = ('%s/spaces/user_%s' %
+                     (APP_PATH, github_user_id))
         try:
-            os.mkdir(project_dir)
+            os.mkdir(space_dir)
         except FileExistsError:
-            app.logger.warning('Project dir for user %s exists, reusing it' %
+            app.logger.warning('Space dir for user %s exists, reusing it' %
                                str(github_user_login))
-        try:
-            os.mkdir(ssh_dir)
-        except FileExistsError:
-            app.logger.warning('SSH key for user %s exists, reusing it' %
-                               str(github_user_login))
-        client.containers.run(image='theiaide/theia-python:latest',
+        client.containers.run(image='editor:latest',
                               name='user_%s' % str(github_user_id),
                               auto_remove=True,
                               detach=True,
                               ports={'3000/tcp': None},
                               network='bridge',
-                              volumes={project_dir: {'bind': '/home/project',
-                                                     'mode': 'rw'},
-                                       ssh_dir: {'bind': '/root/.ssh',
-                                                 'mode': 'rw'}},
+                              volumes={space_dir: {'bind': '/home/project',
+                                                   'mode': 'rw'}},
                               labels={'user': str(github_user_id)})
         time.sleep(3)
         containers = get_containers(github_user_id)

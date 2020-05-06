@@ -1,0 +1,11 @@
+FROM theiaide/theia-python:latest
+
+{% if http_proxy is defined %}
+ENV HTTP_PROXY {{ http_proxy }}
+{% endif %}
+{% if https_proxy is defined %}
+ENV HTTPS_PROXY {{ https_proxy }}
+{% endif %}
+{% if no_proxy is defined %}
+ENV NO_PROXY {{ no_proxy }}
+{% endif %}
