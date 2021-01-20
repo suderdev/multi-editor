@@ -8,4 +8,4 @@ Based on:
 
 ---
 
-[License](LICENSE) - [Source](https://github.com/pasuder/labs) - [About me](https://pa.suder.info)
+[License](LICENSE) - [Source](https://github.com/suderdev/multi-editor) - [About me](https://pawel.suder.page)
