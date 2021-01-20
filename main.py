@@ -13,6 +13,8 @@ from flask_dance import consumer
 
 from raven.contrib import flask as sentry_flask
 
+from werkzeug.middleware.proxy_fix import ProxyFix
+
 APP_PATH = os.environ.get('APP_PATH',
                           os.path.dirname(os.path.abspath(__file__)))
 HOST_APP_PATH = os.environ.get('HOST_APP_PATH',
@@ -41,6 +43,9 @@ oauth = consumer.OAuth2ConsumerBlueprint(
     token_url=os.environ.get('OAUTH_TOKEN_URL'),
     authorization_url=os.environ.get('OAUTH_AUTHORIZATION_URL'),
 )
+
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+app.config['PREFERRED_URL_SCHEME'] = 'https'
 
 
 @ws.route('/services')
