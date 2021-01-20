@@ -1,3 +1,0 @@
-upstream backend {
-    server {{ backend['ansible_facts']['docker_container']['NetworkSettings']['Networks']['bridge']['IPAddress'] }}:5000;
-}

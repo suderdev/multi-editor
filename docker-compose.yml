@@ -1,0 +1,41 @@
+---
+
+version: '3'
+services:
+
+  editor:
+    image: editor
+    build:
+      context: .
+      dockerfile: editor.Dockerfile
+    entrypoint: /bin/sh
+  app:
+    image: app
+    build:
+      context: .
+      dockerfile: app.Dockerfile
+    privileged: true
+    ports:
+      - 5000:5000
+    networks:
+      - internal
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/app
+    environment:
+      PYTHONDONTWRITEBYTECODE: 1
+      PYTHONUNBUFFERED: 1
+      OAUTHLIB_INSECURE_TRANSPORT: 1
+      FLASK_SECRET_KEY: FLASK_SECRET_KEY
+      FLASK_ENV: development
+      OAUTH_CLIENT_ID: OAUTH_CLIENT_ID
+      OAUTH_CLIENT_SECRET: OAUTH_CLIENT_SECRET
+      OAUTH_BASE_URL: https://api.github.com
+      OAUTH_USER_URL: /user
+      OAUTH_TOKEN_URL: https://github.com/login/oauth/access_token
+      OAUTH_AUTHORIZATION_URL: https://github.com/login/oauth/authorize
+      HOST_APP_PATH: $PWD
+
+networks:
+  internal:
+    external: true

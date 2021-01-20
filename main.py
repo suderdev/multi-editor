@@ -15,6 +15,8 @@ from raven.contrib import flask as sentry_flask
 
 APP_PATH = os.environ.get('APP_PATH',
                           os.path.dirname(os.path.abspath(__file__)))
+HOST_APP_PATH = os.environ.get('HOST_APP_PATH',
+                               os.path.dirname(os.path.abspath(__file__)))
 
 SENTRY_DSN = os.environ.get('SENTRY_DSN', None)
 
@@ -42,7 +44,7 @@ oauth = consumer.OAuth2ConsumerBlueprint(
 
 
 @ws.route('/services')
-def services(ext):
+def services(ws_ext):
     assert flask.session['user_login']
     assert flask.session['user_id']
     assert flask.session['ip']
@@ -52,19 +54,15 @@ def services(ext):
     app.logger.info('Forwarder for %s to %s' %
                     (str(user_login), str(ip)))
 
-    int = websocket.WebSocketApp('ws://%s:3000/services' % ip)
+    ws_int = websocket.WebSocketApp('ws://%s:3000/services' % ip)
 
     def on_message(ws, message):
-        app.logger.debug('Forward from service %s: %s' %
-                         (str(ip), str(message)))
-        ext.send(message)
+        ws_ext.send(message)
 
     def forward():
-        while not ext.closed:
-            message = ext.receive()
-            app.logger.debug('Forward to service %s: %s' %
-                             (str(ip), str(message)))
-            int.send(message)
+        while not ws_ext.closed:
+            message = ws_ext.receive()
+            ws_int.send(message)
 
     forwarder = threading.Thread(target=forward)
 
@@ -75,33 +73,28 @@ def services(ext):
                         (str(user_login), str(ip)))
 
     def on_close(ws):
-        ext.disconnect()
+        ws_ext.disconnect()
         app.logger.info('Stopped forwarding data '
                         'for user %s for service %s' %
                         (str(user_login), str(ip)))
 
-    int.on_message = on_message
-    int.on_open = on_open
-    int.on_close = on_close
+    ws_int.on_message = on_message
+    ws_int.on_open = on_open
+    ws_int.on_close = on_close
 
-    int.run_forever()
+    ws_int.run_forever()
 
 
-client = docker.from_env()
+client = docker.DockerClient(base_url='unix:///var/run/docker.sock')
 
 
 def get_containers(user):
     return client.containers.list(filters={'label': 'user=%s' % user})
 
 
-def get_port(container):
-    ports = container.attrs['NetworkSettings']['Ports']
-    return ports['3000/tcp'][0]['HostPort']
-
-
 def get_ip(container):
     ips = container.attrs['NetworkSettings']['Networks']
-    return ips['bridge']['IPAddress']
+    return ips['internal']['IPAddress']
 
 
 @router.route('/')
@@ -135,24 +128,27 @@ def index(url=''):
                         str(github_user_login))
         space_dir = ('%s/spaces/user_%s' %
                      (APP_PATH, github_user_id))
+        host_space_dir = ('%s/spaces/user_%s' %
+                          (HOST_APP_PATH, github_user_id))
         try:
             os.mkdir(space_dir)
         except FileExistsError:
             app.logger.warning('Space dir for user %s exists, reusing it' %
                                str(github_user_login))
-        client.containers.run(image='editor:latest',
+        client.containers.run(image='editor',
                               name='user_%s' % str(github_user_id),
                               auto_remove=True,
                               detach=True,
                               ports={'3000/tcp': None},
-                              network='bridge',
-                              volumes={space_dir: {'bind': '/home/project',
-                                                   'mode': 'rw'}},
+                              network='internal',
+                              volumes={host_space_dir:
+                                       {'bind': '/home/project',
+                                        'mode': 'rw'}},
                               labels={'user': str(github_user_id)})
         time.sleep(3)
         containers = get_containers(github_user_id)
 
-    port = get_port(containers[0])
+    port = '3000'
     ip = get_ip(containers[0])
     flask.session['port'] = port
     flask.session['ip'] = ip
