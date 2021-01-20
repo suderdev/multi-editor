@@ -144,7 +144,6 @@ def index(url=''):
                               name='user_%s' % str(github_user_id),
                               auto_remove=True,
                               detach=True,
-                              ports={'3000/tcp': None},
                               network='internal',
                               volumes={host_space_dir:
                                        {'bind': '/home/project',
