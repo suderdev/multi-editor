@@ -45,7 +45,6 @@ oauth = consumer.OAuth2ConsumerBlueprint(
 )
 
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
-app.config['PREFERRED_URL_SCHEME'] = 'https'
 
 
 @ws.route('/services')
@@ -148,7 +147,8 @@ def index(url=''):
                               volumes={host_space_dir:
                                        {'bind': '/home/project',
                                         'mode': 'rw'}},
-                              labels={'user': str(github_user_id)})
+                              labels={'traefik.enable': 'false',
+                                      'user': str(github_user_id)})
         time.sleep(3)
         containers = get_containers(github_user_id)
 
